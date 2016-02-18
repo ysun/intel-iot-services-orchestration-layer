@@ -25,65 +25,127 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *****************************************************************************/
 import {Link} from "react-router";
+import auth from "../lib/auth";
 
-export default class NavBar extends ReactComponent {
+export default React.createClass({
 
-  state = {
-    app_name: "",
-    app_id: ""
-  };
+  getInitialState() {
+    return {
+      app: null
+    };
+  },
+
+  _on_auth_event(e) {
+    switch(e.event) {
+      case "login":
+      case "logout":
+        this.forceUpdate();
+        break;
+    }
+  },
 
   _on_app_event(e) {
     switch(e.event) {
       case "actived":
         this.setState({
-          app_name: e.name,
-          app_id: e.id
+          app: e.app
         });
         break;
     }
-  }
+  },
 
   componentDidMount() {
     $hope.app.stores.app.on("app", this._on_app_event);
-  }
+    auth.on("auth", this._on_auth_event);
+  },
 
   componentWillUnmount() {
     $hope.app.stores.app.removeListener("app", this._on_app_event);
-  }
+    auth.removeListener("auth", this._on_auth_event);
+  },
 
   render() {
+    var store = $hope.app.stores.ide;
+    var app = this.state.app;
+    var to, btn, extra;
+    if (app) {
+      if (_.startsWith(location.hash, "#/ide/")) {
+        var active_ui = $hope.app.stores.ui.active_view;
+        if (active_ui && active_ui.get_app() === app) {
+          to = "/ui_ide/" + active_ui.id;
+        }
+        else if (app && app.uis && app.uis.length > 0) {
+          to = "/ui_ide/" + app.uis[0].id;
+        }
+        btn = "UI Editor";
+      }
+      else if (_.startsWith(location.hash, "#/ui_ide/")) {
+        var active_graph = $hope.app.stores.graph.active_view;
+        if (active_graph && active_graph.get_app() === app) {
+          to = "/ide/" + active_graph.id;
+        }
+        else if (app && app.graphs && app.graphs.length > 0) {
+          to = "/ide/" + app.graphs[0].id;
+        }
+        btn = "Workflow Editor";
+      }
+      if (to) {
+        extra = [
+          <span key="sep" className="hope-nav-bar-sep">{"|"}</span>,
+          <Link key="sw" to={to}>
+            <i className="fa fa-hand-o-right hope-nav-bar-app" />
+            <span className="hope-nav-bar-app">{" " + __(btn)}</span>
+          </Link>];
+      }
+    }
+
     return (
       <div className="hope-nav-bar">
-        <Link to="/">
+        <Link to={auth.is_logged_in() ? "/app" : "/"}>
           <img className="hope-logo" src="images/logo.png" style={{
             width: 228,
             height: 60,
             padding: "5px 0 5px 15px"
           }}/>
         </Link>
+
         <div style={{
           position: "absolute",
-          top: 8,
-          right: 20
+          top: 16,
+          right: 180
         }}>
-          <Link to="/" > App </Link>
-          | Device | EndUser
+          <a href="http://github.com/01org/intel-iot-services-orchestration-layer" target="_blank">
+            {__("Demo")}
+          </a>
         </div>
 
-        { this.state.app_name &&
+        <div style={{
+          position: "absolute",
+          top: 16,
+          right: 100
+        }}>
+          {$hope.ui_user_port &&
+            <a href={location.protocol + "//" + location.hostname + ":" + $hope.ui_user_port} target="_blank">
+              {__("EndUser")}
+            </a>
+          }
+        </div>
+
+        { app &&
           <div style={{
               position: "absolute",
               top: 16,
-              left: 260
+              left: store.left_toolbar.width + store.panel.library.width
               }}>
-            <Link to="app_home" params={{id: this.state.app_id}}>
-              <i className="fa fa-sitemap hope-nav-bar-app">{" " + this.state.app_name}</i>
+            <Link to={`/app_home/${app.id}`}>
+              <i className="fa fa-hand-o-right hope-nav-bar-app" />
+              <span className="hope-nav-bar-app">{" " + __("App") + ": " + app.name}</span>
             </Link>
+            {extra}
           </div>
         }
-        </div>
+      </div>
     );
   }
-}
+});
 

@@ -94,13 +94,6 @@ class AppStore extends EventEmitter {
     return this.manager.apps;
   }
 
-  update_all_apps() {
-    $hope.app.server.app.list$().done(data => {
-      this.manager.update_all_apps(data);
-      this.emit("app", {type: "app", event: "all_updated"});
-    });
-  }
-
   ensure_apps_loaded$() {
     var apps = this.get_all_apps();
     var d = $Q.defer();  
@@ -118,7 +111,7 @@ class AppStore extends EventEmitter {
   create_app(name, desc) {
     $hope.app.server.app.create$(name, desc).done(data => {
       if (data.error) {
-        $hope.notify("error", "Failed to create app because", data.error);
+        $hope.notify("error", __("Failed to create app because"), data.error);
         return;
       }
       this.manager.create_app(data);
@@ -129,7 +122,7 @@ class AppStore extends EventEmitter {
   remove_app(id) {
     $hope.app.server.app.remove$(id).done(data => {
       if (data.error) {
-        $hope.notify("error", "Failed to delete app because", data.error);
+        $hope.notify("error", __("Failed to delete app because"), data.error);
         return;
       }
       this.manager.remove_app(id);
@@ -140,7 +133,7 @@ class AppStore extends EventEmitter {
   update_app(id, props) {
     $hope.app.server.app.update$(id, props).done(data => {
       if (data.error) {
-        $hope.notify("error", "Failed to update app because", data.error);
+        $hope.notify("error", __("Failed to update app because"), data.error);
         return;
       }
       this.manager.update_app(id, props);
@@ -151,7 +144,7 @@ class AppStore extends EventEmitter {
   active_app_by(check) {
     _.forOwn(this.get_all_apps(), a => {
       if (check(a)) {
-        this.emit("app", {type: "app", name: a.name, id: a.id, event: "actived"});
+        this.emit("app", {type: "app", app: a, event: "actived"});
         return false;
       }
     });
@@ -159,7 +152,7 @@ class AppStore extends EventEmitter {
 
   active_app(check) {
     if (!check) {
-      this.emit("app", {type: "app", name: "", id: "", event: "actived"});
+      this.emit("app", {type: "app", app: null, event: "actived"});
       return;
     }
     if (_.isEmpty(this.get_all_apps())) {
@@ -171,6 +164,10 @@ class AppStore extends EventEmitter {
     }
 
     this.active_app_by(check);
+  }
+
+  clear_cache() {
+    this.manager.clear_cache();
   }
 
 

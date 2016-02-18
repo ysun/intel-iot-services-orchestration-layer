@@ -24,7 +24,8 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *****************************************************************************/
-import {Route, DefaultRoute, NotFoundRoute} from "react-router";
+import {Router, Route, IndexRoute} from "react-router";
+import {createHashHistory, useBeforeUnload} from "history";
 
 import HOPE from "./hope.x";
 import AppManager from "./app/app_manager.x";
@@ -33,15 +34,50 @@ import IDE from "./ide/ide.x";
 import UIIDE from "./ui_ide/ui_ide.x";
 import Composer from "./composer/composer.x";
 import NotFound from "./not_found.x";
+import Login from "./user/login.x";
+import UserMgmt from "./user/user_mgmt.x";
+import auth from "../lib/auth";
+
+let history = useBeforeUnload(createHashHistory)({
+  queryKey: false,
+  getUserConfirmation: function (message, callback) {
+    $hope.confirm(__("Leave without SAVE"), message, "warning", res => {
+      if(!res) {
+        $hope.app.stores.app.active_app(null);
+      }
+      callback(!res);
+    }, {
+      cancelButtonText: __("Leave"),
+      confirmButtonText: __("Cancel and back to edit")
+    });
+  }
+});
+
+function requireAuth(nextState, replaceState) {
+  if ($hope.ui_auth_required && !auth.is_logged_in()) {
+    $hope.ui_redirect = nextState.location.pathname;
+    replaceState({}, '/login');
+  }
+}
+
+function redirectApp(nextState, replaceState) {
+  if (!$hope.ui_auth_required) {
+    replaceState({}, '/app');
+  }
+}
 
 export default (
-  <Route handler={HOPE}>
-    <DefaultRoute handler={AppManager}/>
-    <Route name="app" path="app" handler={AppManager}/>
-    <Route name="app_home" path="app_home/:id" handler={AppHome}/>
-    <Route name="ide" path="ide/:id" handler={IDE}/>
-    <Route name="ui_ide" path="ui_ide/:id" handler={UIIDE}/>
-    <Route name="composer" path="composer/:id" handler={Composer}/>
-    <NotFoundRoute handler={NotFound}/>
-  </Route>
+  <Router history={history} >
+    <Route path="/" component={HOPE}>
+      <IndexRoute component={$hope.ui_auth_required && !auth.is_logged_in() ? Login : AppManager}/>
+      <Route path="login" component={Login} onEnter={redirectApp} />
+      <Route path="users" component={UserMgmt} onEnter={requireAuth} />
+      <Route path="app" component={AppManager} onEnter={requireAuth} />
+      <Route path="app_home/:id" component={AppHome} onEnter={requireAuth} />
+      <Route path="ide/:id" component={IDE} onEnter={requireAuth} />
+      <Route path="ui_ide/:id" component={UIIDE} onEnter={requireAuth} />
+      <Route path="composer/:id" component={Composer} onEnter={requireAuth} />
+      <Route path="*" component={NotFound}/>
+    </Route>
+  </Router>
 );

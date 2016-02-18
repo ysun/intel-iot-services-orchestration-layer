@@ -15,7 +15,7 @@ var categories = {
   "*":      false,
   "message": false,
   "center": true,
-  "entity": true,
+  "entity": false,
   "hub": false,
   "heartbeat": false,
   "wfe": false,
@@ -23,6 +23,16 @@ var categories = {
 };
 
 B.log.configure_categories(categories);
+
+process.on("uncaughtException", function(err) {
+    console.log(">>>>> Unhandled Exception >>>>>>");
+    if (_.isError(err)) {
+      console.log(err.stack);
+    } else {
+      console.log(B.to_string(err));
+    }
+});
+
 
 program
   .version(version)
@@ -46,11 +56,20 @@ config.config_path = B.path.resolve(config_file_path);// the path of the config 
 function _resolve_path(access_str) {
   var x = _.get(config, access_str);
   if (x) {
-    _.set(config, access_str, B.path.abs(x, config.config_path));
+    if (_.isArray(x)) {
+      var paths = x.map(function(p) {
+        return B.path.abs(p, config.config_path);
+      });
+      _.set(config, access_str, paths);
+    }
+    else {
+      _.set(config, access_str, B.path.abs(x, config.config_path));
+    }
   }
 } 
 _resolve_path("assemble.dev_web_app.$params.static");
 _resolve_path("assemble.user_web_app.$params.static");
+_resolve_path("assemble.user_json_path");
 
 // Fix the id of device and mnode
 if (!config.id) {
@@ -65,6 +84,7 @@ if (mnode_params && !mnode_params.id) {
 }
 
 S.enable_debug_shell();
+
 
 process.on("SIGINT", function() {
   B.log("hope", "... CENTER EXITING ...");

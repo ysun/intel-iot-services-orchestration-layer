@@ -24,9 +24,13 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *****************************************************************************/
+import {Popover} from "react-bootstrap";
+import Overlay from "../overlay.x";
+import LinterMessage from "./linter_msg.x";
 import In from "./in.x";
 import Out from "./out.x";
 import class_names from "classnames";
+import color from "color";
 import FONT_AWESOME from "../../lib/font-awesome.js";
 
 export default class Node extends ReactComponent {
@@ -118,18 +122,51 @@ export default class Node extends ReactComponent {
     });
   }
 
+  bind_track_events() {
+    var dom_node = this.refs.box;
+    if (dom_node) {
+      PolymerGestures.addEventListener(dom_node, "trackstart", _.noop);
+      PolymerGestures.addEventListener(dom_node, "track", _.noop);
+      PolymerGestures.addEventListener(dom_node, "trackend", _.noop);
+
+      dom_node.addEventListener("trackstart", this._on_track_start);
+      dom_node.addEventListener("track", this._on_track);
+      dom_node.addEventListener("trackend", this._on_track_end);
+    }
+  }
+
+  unbind_track_events() {
+    var dom_node = this.refs.box;
+    if (dom_node) {
+      PolymerGestures.removeEventListener(dom_node, "trackstart", _.noop);
+      PolymerGestures.removeEventListener(dom_node, "track", _.noop);
+      PolymerGestures.removeEventListener(dom_node, "trackend", _.noop);
+
+      dom_node.removeEventListener("trackstart", this._on_track_start);
+      dom_node.removeEventListener("track", this._on_track);
+      dom_node.removeEventListener("trackend", this._on_track_end);
+    }
+  }
+
+  componentDidUpdate() {
+    var view = this.props.view;
+    var node = view.get("node", this.props.id);
+    var errors = !_.isEmpty(node.$lint_result);
+
+    if (errors !== this.linter_errors) {
+      this.linter_errors = errors;
+
+      this.unbind_track_events();
+      this.bind_track_events();
+    }
+  }
+
   componentDidMount() {
-    var dom_node = React.findDOMNode(this.refs.header);
-    dom_node.addEventListener("trackstart", this._on_track_start);
-    dom_node.addEventListener("track", this._on_track);
-    dom_node.addEventListener("trackend", this._on_track_end);
+    this.bind_track_events();
   }
 
   componentWillUnmount() {
-    var dom_node = React.findDOMNode(this.refs.header);
-    dom_node.removeEventListener("trackstart", this._on_track_start);
-    dom_node.removeEventListener("track", this._on_track);
-    dom_node.removeEventListener("trackend", this._on_track_end);
+    this.unbind_track_events();
   }
 
   render() {
@@ -188,19 +225,6 @@ export default class Node extends ReactComponent {
 
     var tags = [];
 
-    function darken(rgb) {
-      var match = /^#(\w{2})(\w{2})(\w{2})$/.exec(rgb);
-
-      if (!match) {
-        return rgb;
-      }
-      function cvt(i) {
-        var c = (parseInt(match[i], 16) * 0.8 | 0).toString(16);
-        return c.length === 1 ? ("0" + c) : c;
-      }
-      return "#" + cvt(1) + cvt(2) + cvt(3);
-    }
-
     function render_tag(type, x, y) {
       if (node.$has_tags(type)) {
         var tag = view.get("tag", node[type].tags[0].ref); //TODO: Single tag one side only
@@ -218,8 +242,8 @@ export default class Node extends ReactComponent {
         tags.push(
           <g key={type}>
             <rect x={x} y={y} width={tagsz + 2} height={tagsz} fill={rgb} strokeWidth={0}/>
-            <path fill={darken(rgb)} strokeWidth={0} d={path} />
-            <text className="hope-graph-tag" x={x + 3} y={y + 5}>{tag.name}</text>
+            <path fill={color(rgb).darken(0.2).rgbString()} strokeWidth={0} d={path} />
+            <text className="hope-graph-tag" x={x + 3} y={y + 8}>{tag.name}</text>
           </g>
         );
       }
@@ -284,19 +308,29 @@ export default class Node extends ReactComponent {
               key="text"
               x={styles.x + styles.width / 2} 
               y={styles.y + styles.height + 18}>
-          {widget !== null ? widget : (thing ? thing.name : "---")}
+          {widget !== null ? widget : (thing ? thing.$name() : "---")}
         </text>
         );
     }
 
-    var _name = service ? service.$name() : node.name;
-    _name = _name || "__unknown__";
-    return (
-      <g className={class_names("hope-graph-node", {"hope-graph-selected": this._is_selected()})}>
-        <g onClick={this._on_click}>
+    var _name = node.name || (service ? service.$name() : "") || spec.name || __("__unknown__");
+    var errors = !_.isEmpty(node.$lint_result);
+    var body =
+      <g className={class_names("hope-graph-node",
+          {"hope-graph-selected": !view.edge_previewing && this._is_selected()})} >
+        {errors &&
+          <rect x={styles.x}
+                y={styles.y}
+                width={styles.width}
+                height={styles.height + (exp ? 24 : 0)}
+                strokeWidth="8"
+                stroke={this._is_selected() ? "#f00" : "#a00"} />
+        }
+        <g ref="box" onClick={this._on_click}>
           <path className={"hope-graph-node-title-bar " + $hope.color(styles.color, "fill")} 
-                d={hdr_path} ref="header" />
-          <path className={(this._is_animated() ? "hope-graph-node-shadow" : "")}
+                d={hdr_path} />
+          <path className={(this._is_animated() ? "hope-graph-node-shadow" :
+                  $hope.color(_.isEmpty(spec) ? 1 : null, "fill"))}
                 d={body_path} />
           {binding_items}
           {groups}
@@ -313,7 +347,16 @@ export default class Node extends ReactComponent {
         </g>
         <In view={this.props.view} id={id} />
         <Out view={this.props.view} id={id} />
-      </g>
-    );
+      </g>;
+  
+    return errors ?
+      <Overlay overlay={
+        <Popover id="PO-linter" title={__("Errors and Warnings")}>
+          <div>
+            {_.map(node.$lint_result, (msg, i) =>
+                <LinterMessage type="error" key={"E" + i} msg={msg}/>
+            )}
+          </div>
+        </Popover>} tirgger={["click", "hover", "focus"]}>{body}</Overlay> : body;
   }
 }

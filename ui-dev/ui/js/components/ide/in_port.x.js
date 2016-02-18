@@ -85,25 +85,16 @@ export default class InPort extends ReactComponent {
         r={r} />;
     }
 
-    if ("default" in port) {
+    if ("default" in port && _.isEmpty(view.find_edge(null, port))) {
       let val = String(port.default);
-      if (val.length <= 3) {
-        defval =
-          <text className="hope-graph-port-default"
-                key="defval"
-                x={t.x}
-                y={t.y - 6}>
-            { val }
-          </text>;
-      }
-      else {
+      if (val.length > 0) {
         var edges = view.find_edge(null, port);
         if (!edges || !edges.length) {
           defval =
             <text className="hope-graph-port-default"
                 key="defval"
                 x={t.x - linelen - r}
-                y={t.y - 2}>
+                y={t.y + 3}>
               { val }
             </text>;
         }
@@ -115,7 +106,7 @@ export default class InPort extends ReactComponent {
         <text className={"hope-graph-port-text"}
               key="name"
               x={t.x + (node.in.groups ? 10 : 5)} y={t.y + 3}>{name}</text>
-        <line className={"hope-graph-in-line" + (port.passive ? " hope-graph-dash" : "") + $hope.color(color, "stroke")}
+        <line className={"hope-graph-in-line" + (port.no_trigger ? " hope-graph-dash" : "") + $hope.color(color, "stroke")}
               x1={t.x} y1={t.y} x2={t.x - linelen} y2={t.y} />
         { circle }
         { inner_circle }

@@ -24,18 +24,41 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *****************************************************************************/
-import {Route, DefaultRoute, NotFoundRoute} from "react-router";
+import {Router, Route, IndexRoute} from "react-router";
+import {createHashHistory, useBeforeUnload} from "history";
 
 import HOPE from "./hope.x";
 import AppManager from "./app/app_manager.x";
 import UI from "./ui_ide/ui_ide.x";
 import NotFound from "./not_found.x";
+import Login from "./login.x";
+import auth from "../lib/auth";
+
+let history = useBeforeUnload(createHashHistory)({
+  queryKey: false
+});
+
+function requireAuth(nextState, replaceState) {
+  if ($hope.ui_auth_required && !auth.is_logged_in()) {
+    $hope.ui_redirect = nextState.location.pathname;
+    replaceState({}, '/login');
+  }
+}
+
+function redirectApp(nextState, replaceState) {
+  if (!$hope.ui_auth_required) {
+    replaceState({}, '/app');
+  }
+}
 
 export default (
-  <Route handler={HOPE}>
-    <DefaultRoute handler={AppManager}/>
-    <Route name="app" path="app" handler={AppManager}/>
-    <Route name="ui" path="ui/:id" handler={UI}/>
-    <NotFoundRoute handler={NotFound}/>
-  </Route>
+  <Router history={history} >
+    <Route path="/" component={HOPE}>
+      <IndexRoute component={$hope.ui_auth_required && !auth.is_logged_in() ? Login : AppManager}/>
+      <Route path="login" component={Login} onEnter={redirectApp} />
+      <Route path="app" component={AppManager} onEnter={requireAuth} />
+      <Route path="ui/:id" component={UI} onEnter={requireAuth} />
+      <Route path="*" component={NotFound}/>
+    </Route>
+  </Router>
 );

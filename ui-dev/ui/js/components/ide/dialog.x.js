@@ -25,6 +25,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *****************************************************************************/
 var {Modal, Input, Button} = require("react-bootstrap");
+var ColorPicker = require("react-colorpickr");
 
 var dlg_mount_node = null;
 $(function() {
@@ -36,55 +37,101 @@ $(function() {
   dlg_mount_node = mount[0];
 });
 
-function _on_close() {
-  setTimeout(() => {
-    React.unmountComponentAtNode(dlg_mount_node);
-  }, 0);
+function _focus_input(selector) {
+  var input = $(selector);
+  if(input[0].setSelectionRange) {
+    var len = input.val().length;
+    input[0].setSelectionRange(len, len);
+  } else {
+    input.val(input.val());
+  }
+  input.focus();
 }
 
 var Dialog = React.createClass({
-  render: function() {
+  _on_key_up(e) {
+    if (e.keyCode === 13 && this.props.onOK) { // ENTER
+      e.stopPropagation();
+      this._on_click_ok();
+    }
+  },
+  _on_click_ok() {
+    if (this.props.onOK() === false) {
+      return;
+    }
+    this._on_close();
+  },
+  _on_close() {
+    this.refs.dlg._onHide();
+    process.nextTick(() => {
+      ReactDOM.unmountComponentAtNode(dlg_mount_node);
+    });
+  },
+  componentDidMount() {
+    document.addEventListener("keyup", this._on_key_up);
+  },
+  componentWillUnmount() {
+    document.removeEventListener("keyup", this._on_key_up);
+  },
+  render() {
     return (
-      <div className="static-modal">
-        <Modal onRequestHide={_on_close} {...this.props.modal}>
-          <div className={"modal-body" + (this.props.clazz || "")}>
-            {this.props.children}
-          </div>
-          { this.props.footer &&
-            <div className="modal-footer">
-              {this.props.footer}
-            </div>
-          }
-        </Modal>
-      </div>
+      <Modal ref="dlg" show={true} onHide={this._on_close} {...this.props.modal}>
+        <Modal.Header closeButton>
+          <Modal.Title>{this.props.title}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body bsClass={this.props.clazz || "modal"}>
+          {this.props.children}
+        </Modal.Body>
+        {!this.props.no_footer &&
+        <Modal.Footer>
+          <Button key="x" onClick={this._on_close}>{this.props.cancelStr || __("Cancel")}</Button>
+          <Button key="c" bsStyle="primary" onClick={this._on_click_ok}>{this.props.okStr || __("OK")}</Button>
+        </Modal.Footer>}
+      </Modal>
     );
   }
 });
 
 //////////////////////////////////////////////////////////////////
+// Create dialog
+//////////////////////////////////////////////////////////////////
+
+Dialog.show_create_dialog = function(title, ok_cb, ok_str, name_def, desc_def) {
+  ReactDOM.render(
+    <Dialog title={title}
+      okStr={ok_str || __("Create")}
+      onOK={() => {
+        ok_cb({
+          name: $("#Dlg_Create_Name").val(),
+          description: $("#Dlg_Create_Desc").val()
+        });
+      }}>
+      <Input type="text"
+             label={__("Name")}
+             id="Dlg_Create_Name"
+             defaultValue={name_def || ""}
+             placeholder={__("Enter Name")}/>
+      <Input type="text"
+             label={__("Description")}
+             id="Dlg_Create_Desc"
+             defaultValue={desc_def || ""}
+             placeholder={__("Enter Description")}/>
+    </Dialog>, dlg_mount_node);
+
+  _focus_input("#Dlg_Create_Name");
+};
+
+//////////////////////////////////////////////////////////////////
 // Text Edit dialog
 //////////////////////////////////////////////////////////////////
 
-Dialog.show_edit_dialog = function(title, ok_cb, txt, placeholder, ok_btn) {
-  function _on_ok() {
-    setTimeout(() => {
-      React.unmountComponentAtNode(dlg_mount_node);
-      if (ok_cb) {
-        ok_cb(input.val());
-      }
-    }, 0);
-  }
-
-  var footer = [
-    <Button onClick={_on_close}>Cancel</Button>,
-    <Button onClick={_on_ok} bsStyle="primary">{ok_btn || "Save"}</Button>
-  ];
-
-  React.render(
-    <Dialog modal={{
-        title: title
-      }}
-      footer={footer} >
+Dialog.show_edit_dialog = function(title, ok_cb, txt, placeholder, ok_str) {
+  ReactDOM.render(
+    <Dialog title={title}
+      okStr={ok_str || __("Save")}
+      onOK={() => {
+        ok_cb($("#dlg_edit_InPuT").val());
+      }} >
       <Input type="text"
         id="dlg_edit_InPuT"
         className="form-control"
@@ -92,14 +139,7 @@ Dialog.show_edit_dialog = function(title, ok_cb, txt, placeholder, ok_btn) {
         defaultValue={txt || ""} />
     </Dialog>, dlg_mount_node);
 
-  var input = $("#dlg_edit_InPuT");
-  if(input[0].setSelectionRange) {
-    var len = input.val().length;
-    input[0].setSelectionRange(len, len);
-  } else {
-    input.val(input.val());
-  }
-  input[0].focus();
+  _focus_input("#dlg_edit_InPuT");
 };
 
 //////////////////////////////////////////////////////////////////
@@ -108,25 +148,11 @@ Dialog.show_edit_dialog = function(title, ok_cb, txt, placeholder, ok_btn) {
 
 Dialog.show_iconpicker_dialog = function(title, ok_cb, icon) {
   var newicon = icon;
-  function _on_ok() {
-    setTimeout(() => {
-      React.unmountComponentAtNode(dlg_mount_node);
-      if (ok_cb) {
+  ReactDOM.render(
+    <Dialog title={title}
+      onOK={() => {
         ok_cb(newicon);
-      }
-    }, 0);
-  }
-
-  var footer = [
-    <Button onClick={_on_close}>Cancel</Button>,
-    <Button onClick={_on_ok} bsStyle="primary">Save</Button>
-  ];
-
-  React.render(
-    <Dialog modal={{
-        title: title
-      }}
-      footer={footer} >
+      }} >
       <div role="iconpicker" data-iconset="fontawesome" data-rows="8" data-cols="12" data-icon={"fa-" + icon} />
     </Dialog>, dlg_mount_node);
   $('div[role="iconpicker"]').iconpicker().on('change', e => newicon = e.icon);
@@ -134,17 +160,114 @@ Dialog.show_iconpicker_dialog = function(title, ok_cb, icon) {
 
 
 //////////////////////////////////////////////////////////////////
+// Color picker dialog
+//////////////////////////////////////////////////////////////////
+
+Dialog.show_colorpicker_dialog = function(title, ok_cb, color) {
+  var newcr = color;
+  ReactDOM.render(
+    <Dialog title={title} modal={{
+        dialogClassName: "hope-color-picker-modal"
+      }}
+      onOK={() => {
+        ok_cb(newcr);
+      }} >
+      <div>
+        <ColorPicker value={color} onChange={cr => newcr = "#" + cr.hex} />
+      </div>
+    </Dialog>, dlg_mount_node);
+};
+
+//////////////////////////////////////////////////////////////////
 // Show SVG animation dialog
 //////////////////////////////////////////////////////////////////
 
 Dialog.show_svg_animation_dialog = function(title, svg) {
-  React.render(
-    <Dialog clazz=" svg-dialog-body" modal={{
-        dialogClassName: "svg-dialog-content",
-        title: title
+  ReactDOM.render(
+    <Dialog clazz=" svg-dialog" no_footer={1} title={title} modal={{
+        dialogClassName: "svg-dialog-content"
       }} >
       {svg}
     </Dialog>, dlg_mount_node);
 };
+
+//////////////////////////////////////////////////////////////////
+// Show html help dialog
+//////////////////////////////////////////////////////////////////
+
+Dialog.show_html_dialog = function(url) {
+  ReactDOM.render(
+    <Dialog clazz=" html-dialog" no_footer={1} title={__("Help")} modal={{
+        dialogClassName: "html-dialog-content"
+      }}>
+      <iframe id="html-dialog-iframe" src={url} />
+    </Dialog>, dlg_mount_node);
+};
+
+
+//////////////////////////////////////////////////////////////////
+// Change password dialog
+//////////////////////////////////////////////////////////////////
+
+Dialog.show_chpass_dialog = function(user, ok_cb) {
+  ReactDOM.render(
+    <Dialog title={__("Change Password")}
+      onOK={() => {
+        var old = $("#dlg_chpass_old").val();
+        var np = $("#dlg_chpass_new").val();
+        var np2 = $("#dlg_chpass_new2").val();
+        if (np !== np2) {
+          $hope.alert(__("Error"), __("Password mismatched"), "error");
+          return false;
+        }
+        ok_cb(old, np);
+      }} >
+      <Input type="text" label={__("User Name")} disabled={true} defaultValue={user} />
+      <Input type="password" id="dlg_chpass_old"  label={__("Old password")} />
+      <Input type="password" id="dlg_chpass_new"  label={__("New password")} />
+      <Input type="password" id="dlg_chpass_new2" label={__("Confirm password")} />
+    </Dialog>, dlg_mount_node);
+
+  _focus_input("#dlg_chpass_old");
+};
+
+//////////////////////////////////////////////////////////////////
+// Add new user dialog
+//////////////////////////////////////////////////////////////////
+
+Dialog.show_new_user_dialog = function(cb) {
+  ReactDOM.render(
+    <Dialog title={__("Add New User")}
+      onOK={() => {
+        var name = $("#au_name").val();
+        var role = $("#au_role").val();
+        var p1 = $("#au_p1").val();
+        var p2 = $("#au_p2").val();
+        if (p1 !== p2) {
+          $hope.alert(__("Error"), __("Password mismatched"), "error");
+          return false;
+        }
+        cb({
+          name: name,
+          passwd: p1,
+          role: role
+        });
+      }} >
+      <Input type="text" id="au_name" label={__("User Name")} />
+      <div className="form-group">
+        <label className="control-label">
+          <span>{__("Role")}</span>
+        </label>
+        <select className="form-control" defaultValue="guest" id="au_role">
+          <option value="admin">{__("Administrator")}</option>
+          <option value="guest">{__("Guest")}</option>
+        </select>
+      </div>
+      <Input type="password" id="au_p1" label={__("Password")} />
+      <Input type="password" id="au_p2" label={__("Confirm password")} />
+    </Dialog>, dlg_mount_node);
+
+  _focus_input("#au_name");
+},
 
 module.exports = Dialog;
